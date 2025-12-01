@@ -1,0 +1,84 @@
+:root{
+  --sidenav-width: 250px;
+  --sidenav-collapsed-width: 72px;
+  --brand-1: #0B0C10;
+  --brand-2: #F28333;
+  --muted-1: #C5C6C7;
+  --accent-a: #66FCF1;
+  --accent-b: #45A29E;
+}
+
+/* Reset some Bootstrap spacing for the app layout */
+html,body,#root { height:100%; }
+
+.app-layout { min-height:100vh; background: #f6f7f9; }
+
+/* Desktop main shifts by the sidebar width */
+@media (min-width: 992px) {
+  main.app-main {
+    margin-left: var(--sidenav-width);
+    transition: margin-left 140ms ease, padding 140ms ease;
+    padding: 1.25rem;
+  }
+
+  aside.app-sidenav {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1030;
+    transition: width 140ms ease;
+  }
+}
+
+/* Mobile main is full width; offcanvas handles sidebar */
+@media (max-width: 991.98px) {
+  main.app-main {
+    margin-left: 0;
+    padding: 0.75rem;
+  }
+
+  aside.app-sidenav { position: static; width:100%; }
+}
+
+/* Cards, small style polish */
+.card { border-radius: .6rem; box-shadow: 0 1px 6px rgba(11,12,16,0.04); }
+.app-topbar { background: white; border-bottom: 1px solid rgba(0,0,0,0.05); }
+
+/* Sidebar specific */
+.sidenav-logo { font-weight:700; letter-spacing:0.2px; }
+.sidenav-compact .nav-label { display:none; }
+.sidenav-compact .sidenav-footer { text-align:center; padding: .75rem 0; }
+
+/* Make active navs crisp */
+.list-group-item.active { background: linear-gradient(90deg, var(--accent-a), var(--accent-b)); border-color:transparent; color:#0B0C10; }
+
+/* small responsive tweaks */
+@media (max-width: 420px) {
+  .app-main { padding: .5rem; }
+}
+
+
+.assessment-create-page {
+  padding-bottom: 4rem;
+}
+
+/* Default (mobile): let everything grow and use full-page scroll */
+.assessment-json-body,
+.assessment-preview-body {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Only on md+ (desktop / tablet) we constrain height and use inner scroll */
+@media (min-width: 768px) {
+  .assessment-json-body {
+    max-height: 60vh;
+    overflow: auto;
+  }
+
+  .assessment-preview-body {
+    max-height: 70vh;
+    overflow: auto;
+  }
+}

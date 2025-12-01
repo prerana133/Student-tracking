@@ -1,0 +1,105 @@
+# React build output
+/node_modules
+/build
+/dist
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Optional: if using eslint/prettier caches
+.eslintcache
+.stylelintcache
+
+# Optional: if using parcel/vite
+.parcel-cache
+/.cache
+
+
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.egg
+build/
+develop-eggs/
+dist/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+# Virtual environment
+/live/
+venv/
+env/
+.virtualenv/
+.venv/
+
+# Django specific
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+static/
+
+# Environment variables
+.env
+.env.local
+
+# Migrations (OPTIONAL — if you want to avoid pushing migration files)
+# **Remove this if you want to track migrations**
+#migrations/**/*
+#!migrations/__init__.py
+
+# Byte-compiled / cache
+.pytest_cache/
+pytestdebug.log
+.cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# PyCharm
+*.iml
+*.ipr
+*.iws
+
+# Docker
+docker-compose.override.yml
+docker-compose.local.yml
