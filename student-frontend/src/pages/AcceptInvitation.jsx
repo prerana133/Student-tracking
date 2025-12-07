@@ -3,6 +3,9 @@ import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import API from "../api";
+import StudentForm from "../components/StudentForm";
+import TeacherForm from "../components/TeacherForm";
+import AdminForm from "../components/AdminForm";
 
 export default function AcceptInvitation() {
   const [searchParams] = useSearchParams();
@@ -10,6 +13,7 @@ export default function AcceptInvitation() {
   const preUsername = searchParams.get("username") || "";
   const preFirst = searchParams.get("first_name") || "";
   const preLast = searchParams.get("last_name") || "";
+  const role = searchParams.get("role") || "";
   const { acceptInvitation } = useAuth();
   const nav = useNavigate();
 
@@ -54,29 +58,77 @@ export default function AcceptInvitation() {
   const [fatherName, setFatherName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [joiningDate, setJoiningDate] = useState("");
+  // Teacher / Admin additional profile fields
+  const [teacherSubject, setTeacherSubject] = useState("");
+  const [adminDepartment, setAdminDepartment] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   // Build payload for API
   function buildPayload() {
-    return {
+    const base = {
       token,
       username,
       first_name: firstName,
       last_name: lastName,
       password,
-
-      // Student profile fields (all required now)
-      roll_no: rollNo,
-      course,
-      phone,
-      father_name: fatherName,
-      date_of_birth: dateOfBirth,
-      joining_date: joiningDate,
-
       batch: selectedBatch,
     };
+
+    if (role === "student") {
+      const payload = {
+        ...base,
+        // Student profile fields
+        roll_no: rollNo,
+        course,
+        phone,
+        father_name: fatherName,
+        date_of_birth: dateOfBirth,
+        joining_date: joiningDate,
+      };
+
+      // Clean payload: remove empty-string fields and convert empty dates/batch to null
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === "") delete payload[k];
+      });
+
+      if (payload.date_of_birth === "") payload.date_of_birth = null;
+      if (payload.joining_date === "") payload.joining_date = null;
+      if (payload.batch === "") payload.batch = null;
+
+      return payload;
+    }
+
+    if (role === "teacher") {
+      const payload = {
+        ...base,
+        // Teacher profile fields
+        phone,
+        subject: teacherSubject,
+      };
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === "") delete payload[k];
+      });
+      if (payload.batch === "") payload.batch = null;
+      return payload;
+    }
+
+    if (role === "admin") {
+      const payload = {
+        ...base,
+        // Admin profile fields
+        phone,
+        department: adminDepartment,
+      };
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === "") delete payload[k];
+      });
+      if (payload.batch === "") payload.batch = null;
+      return payload;
+    }
+
+    return base;
   }
 
   const onSubmit = async (e) => {
@@ -104,33 +156,43 @@ export default function AcceptInvitation() {
         <div className="col-lg-8 col-md-10">
           <div className="card shadow-sm">
             <div className="card-body">
-              <h4 className="card-title mb-2">Accept Invitation</h4>
-              <p className="text-muted mb-3">
-                Please complete your details to create your account.
-              </p>
 
-              {!token && (
-                <div className="alert alert-danger">
-                  Invitation token is missing or invalid. Please check your link
-                  or request a new invitation.
-                </div>
-              )}
-
-              {error && (
-                <div className="alert alert-danger">
-                  <strong>Error:</strong>
-                  <pre className="mb-0 mt-1 small">
-                    {typeof error === "string"
-                      ? error
-                      : JSON.stringify(error, null, 2)}
-                  </pre>
-                </div>
-              )}
+              <h4 className="card-title mb-2">Accept Invitation ({role})</h4>
 
               <form onSubmit={onSubmit}>
-                {/* --------- User Info --------- */}
-                <h6 className="mb-3">Account Information</h6>
-                <div className="row g-3">
+                {error && (
+                  <div className="alert alert-danger" role="alert">
+                    {typeof error === 'string' ? error : JSON.stringify(error)}
+                  </div>
+                )}
+
+                {/* Common user fields */}
+                <hr className="my-4" />
+                <h6 className="mb-3">Account Details</h6>
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label">Username</label>
+                    <input
+                      className="form-control"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                      disabled={submitting}
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label">Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={submitting}
+                    />
+                  </div>
+
                   <div className="col-md-6">
                     <label className="form-label">First Name</label>
                     <input
@@ -152,170 +214,59 @@ export default function AcceptInvitation() {
                       disabled={submitting}
                     />
                   </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Username</label>
-                    <input
-                      className="form-control"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create a secure password"
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
                 </div>
+                {role === "student" && (
+                  <StudentForm
+                    batches={batches}
+                    selectedBatch={selectedBatch}
+                    setSelectedBatch={setSelectedBatch}
+                    rollNo={rollNo}
+                    setRollNo={setRollNo}
+                    course={course}
+                    setCourse={setCourse}
+                    phone={phone}
+                    setPhone={setPhone}
+                    fatherName={fatherName}
+                    setFatherName={setFatherName}
+                    dateOfBirth={dateOfBirth}
+                    setDateOfBirth={setDateOfBirth}
+                    joiningDate={joiningDate}
+                    setJoiningDate={setJoiningDate}
+                    submitting={submitting}
+                  />
+                )}
 
-                {/* --------- Batch --------- */}
-                <hr className="my-4" />
-                <h6 className="mb-3">Batch Details</h6>
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <label className="form-label">
-                      Batch <span className="text-danger">*</span>
-                    </label>
-                    <select
-                      className="form-select"
-                      value={selectedBatch}
-                      onChange={(e) => setSelectedBatch(e.target.value)}
-                      required
-                      disabled={submitting}
-                    >
-                      <option value="">Select batch</option>
-                      {batches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                {role === "teacher" && (
+                  <TeacherForm
+                    phone={phone}
+                    setPhone={setPhone}
+                    subject={teacherSubject}
+                    setSubject={setTeacherSubject}
+                    submitting={submitting}
+                  />
+                )}
 
-                {/* --------- Student Profile --------- */}
-                <hr className="my-4" />
-                <h6 className="mb-3">Student Profile</h6>
+                {role === "admin" && (
+                  <AdminForm
+                    phone={phone}
+                    setPhone={setPhone}
+                    department={adminDepartment}
+                    setDepartment={setAdminDepartment}
+                    submitting={submitting}
+                  />
+                )}
 
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <label className="form-label">Roll No</label>
-                    <input
-                      className="form-control"
-                      value={rollNo}
-                      onChange={(e) => setRollNo(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Course</label>
-                    <input
-                      className="form-control"
-                      value={course}
-                      onChange={(e) => setCourse(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Phone</label>
-                    <input
-                      type="tel"
-                      className="form-control"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Father's Name</label>
-                    <input
-                      className="form-control"
-                      value={fatherName}
-                      onChange={(e) => setFatherName(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Date of Birth</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={dateOfBirth}
-                      onChange={(e) => setDateOfBirth(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">Joining Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={joiningDate}
-                      onChange={(e) => setJoiningDate(e.target.value)}
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-                </div>
-
-                {/* --------- Actions --------- */}
-                <div className="mt-4 d-flex justify-content-between">
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={() => nav("/login")}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={submitting || !token}
-                  >
-                    {submitting ? (
-                      <>
-                        <span
-                          className="spinner-border spinner-border-sm me-2"
-                          role="status"
-                          aria-hidden="true"
-                        />
-                        Creating account...
-                      </>
-                    ) : (
-                      "Accept Invitation"
-                    )}
-                  </button>
-                </div>
+                {/* Common Submit Button */}
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? "Submitting..." : "Accept Invitation"}
+                </button>
               </form>
+
             </div>
           </div>
-          <p className="text-center text-muted small mt-3">
-            Invitation will be verified using the token in your link.
-          </p>
         </div>
       </div>
     </div>
   );
+
 }

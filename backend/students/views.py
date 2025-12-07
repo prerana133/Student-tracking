@@ -720,9 +720,9 @@ class AssessmentSubmitView(APIView):
 
         # ---- IMPORTANT: calculate and store score ----
         score = calculate_score(
-        assessment.answer_key,  # use stored answer key
-        serializer.validated_data["answers"],
-    )
+            assessment.answer_key,  # use stored answer key
+            serializer.validated_data["answers"],
+        )
 
 
 

@@ -1,11 +1,12 @@
 // src/pages/InviteUser.jsx
 import React, { useEffect, useState } from "react";
 import API from "../api"; // axios wrapper
+import { useAuth } from "../hooks/useAuth";
 
 export default function InviteUser() {
   const [form, setForm] = useState({
     email: "",
-    role: "student",
+    role: "",
     batch: "",
   });
   const [loading, setLoading] = useState(false);
@@ -47,30 +48,12 @@ export default function InviteUser() {
     const { name, value } = e.target;
 
     setForm((prev) => {
-      // When changing role, optionally clear/auto-set batch
+      // When changing role, clear batch unless role is student
       if (name === "role") {
-        if (value !== "student") {
-          // non-student → batch optional & cleared
-          return {
-            ...prev,
-            role: value,
-            batch: "",
-          };
-        }
-        // switching to student → auto-pick first batch if available
-        if (value === "student" && batches.length > 0 && !prev.batch) {
-          return {
-            ...prev,
-            role: value,
-            batch: String(batches[0].id),
-          };
-        }
+        return { ...prev, role: value, batch: value === "student" ? prev.batch : "" };
       }
 
-      return {
-        ...prev,
-        [name]: value,
-      };
+      return { ...prev, [name]: value };
     });
   };
 
@@ -111,19 +94,25 @@ export default function InviteUser() {
     loadInvitations();
   }, []);
 
-  // If role is student and batches arrive later, auto-select first batch (once)
+  // get current user to determine allowed invite roles
+  const { user } = useAuth();
+
+  // compute allowed roles for the role select based on current user role
+  const allowedRoles = (() => {
+    const r = user?.role || user?.roles || null;
+    const roleStr = typeof r === "string" ? r.toLowerCase() : null;
+    if (roleStr === "admin" || user?.is_superuser) return ["student", "teacher", "admin"];
+    if (roleStr === "teacher") return ["student", "teacher"];
+    // default fallback: allow only student invite
+    return ["student"];
+  })();
+
+  // If current selected role is not allowed (e.g., user's role changed), clear it
   useEffect(() => {
-    if (
-      form.role === "student" &&
-      batches.length > 0 &&
-      !form.batch // nothing selected yet
-    ) {
-      setForm((prev) => ({
-        ...prev,
-        batch: String(batches[0].id),
-      }));
+    if (form.role && !allowedRoles.includes(form.role)) {
+      setForm((prev) => ({ ...prev, role: "", batch: "" }));
     }
-  }, [batches, form.role, form.batch]);
+  }, [allowedRoles]);
 
 const submit = async (e) => {
   e.preventDefault();
@@ -137,14 +126,8 @@ const submit = async (e) => {
       return;
     }
 
-    const payload = {
-      email: form.email,
-      role: form.role,
-    };
-
-    if (form.batch) {
-      payload.batch = form.batch;
-    }
+    const payload = { email: form.email, role: form.role };
+    if (form.role === "student" && form.batch) payload.batch = form.batch;
 
     // ---- CALL API AND GET THE RESPONSE ----
     const res = await API.post("/users/invite-user/", payload);
@@ -154,8 +137,8 @@ const submit = async (e) => {
 
     setMessage("Invitation sent successfully!");
 
-    // Reset form
-    setForm({ email: "", role: "student", batch: "" });
+    // Reset form (no prefill)
+    setForm({ email: "", role: "", batch: "" });
 
     // Reload table
     loadInvitations();
@@ -234,53 +217,39 @@ const submit = async (e) => {
               {/* Role */}
               <div className="col-12 col-sm-6 col-md-3">
                 <label className="form-label">Role</label>
-                <select
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  className="form-select"
-                >
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-
-              {/* Batch select */}
-              <div className="col-12 col-sm-6 col-md-3">
-                <label className="form-label">
-                  Batch{" "}
-                  {isStudentRole && (
-                    <span className="text-danger" style={{ fontSize: "0.8rem" }}>
-                      * required for students
-                    </span>
-                  )}
-                </label>
-                <select
-                  name="batch"
-                  value={form.batch}
-                  onChange={handleChange}
-                  className="form-select"
-                  disabled={loadingBatches}
-                >
-                  <option value="">
-                    {loadingBatches
-                      ? "Loading batches..."
-                      : isStudentRole
-                      ? "Select batch"
-                      : "Optional: select batch"}
-                  </option>
-                  {batches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name || `Batch #${b.id}`}
+                <select name="role" value={form.role} onChange={handleChange} className="form-select">
+                  <option value="">Select role</option>
+                  {allowedRoles.map((r) => (
+                    <option key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
                     </option>
                   ))}
                 </select>
-                <div className="form-text">
-                  For <strong>student</strong> invites, batch is required. For
-                  teachers/admins, it’s optional.
-                </div>
               </div>
+
+              {/* Batch select: only show when role is student */}
+              {isStudentRole && (
+                <div className="col-12 col-sm-6 col-md-3">
+                  <label className="form-label">
+                    Batch <span className="text-danger" style={{ fontSize: "0.8rem" }}>* required</span>
+                  </label>
+                  <select
+                    name="batch"
+                    value={form.batch}
+                    onChange={handleChange}
+                    className="form-select"
+                    disabled={loadingBatches}
+                    required
+                  >
+                    <option value="">{loadingBatches ? "Loading batches..." : "Select batch"}</option>
+                    {batches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name || `Batch #${b.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Submit */}
               <div className="col-12 col-md-2">

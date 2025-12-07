@@ -153,7 +153,6 @@ export default function AttendanceBulk() {
         present_student_ids: Array.from(presentSet),
       };
       const res = await API.post("/students/attendance/bulk/", payload);
-      console.log("Attendance save response:", res.data);
       setMessage("Attendance saved successfully.");
       setMessageType("success");
 

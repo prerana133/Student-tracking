@@ -22,14 +22,7 @@ function getAccess() {
 API.interceptors.request.use((config) => {
   const access = getAccess();
   if (access) config.headers.Authorization = `Bearer ${access}`;
-  if (import.meta.env.DEV) {
-    try {
-      const tokenPreview = access ? `Bearer ...${access.slice(-8)}` : "(no token)";
-      console.debug("API Request:", config.method?.toUpperCase(), config.url, "Auth:", tokenPreview);
-    } catch {
-      console.debug("API Request:", config.method?.toUpperCase(), config.url, "Auth: (error reading token)");
-    }
-  }
+  // Development-only request debug removed to reduce noisy logs in console
   return config;
 });
 

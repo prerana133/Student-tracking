@@ -34,11 +34,11 @@ export default function SideNav() {
     try {
       document.documentElement.style.setProperty("--sidenav-width", w);
     } catch (e) {
-      console.log("Failed to set --sidenav-width:", e);
+      console.warn("Failed to set --sidenav-width:", e);
       try {
         document.body.style.setProperty("--sidenav-width", w);
       } catch {
-        console.log("Failed to set --sidenav-width on body:", e);
+        console.warn("Failed to set --sidenav-width on body:", e);
       }
     }
   }

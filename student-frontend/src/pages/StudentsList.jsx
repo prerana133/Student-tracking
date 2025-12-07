@@ -360,14 +360,12 @@ export default function StudentsList() {
                         key={s.id ?? s.user_id ?? idx}
                         role="button"
                         tabIndex={0}
-                        onClick={() => {
-                          console.log("open student", s.id ?? s.user_id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            console.log("open student", s.id ?? s.user_id);
-                          }
-                        }}
+                        onClick={() => { /* row click: open student detail (not implemented) */ }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                /* keyboard open student (not implemented) */
+                              }
+                            }}
                         style={{ cursor: "pointer" }}
                         title={`Open ${fullName}`}
                       >

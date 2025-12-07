@@ -18,7 +18,13 @@ def send_invitation_email(invitation, frontend_url=None):
 
     # Use override if provided, otherwise settings.FRONTEND_URL
     frontend_url = frontend_url or getattr(settings, 'FRONTEND_URL', 'http://localhost:4200')
-    invitation_url = f"{frontend_url.rstrip('/')}/accept-invitation?token={invitation.token}"
+    # invitation_url = f"{frontend_url.rstrip('/')}/accept-invitation?token={invitation.token}"
+    invitation_url = (
+        f"{frontend_url.rstrip('/')}/accept-invitation?"
+        f"token={invitation.token}"
+        f"&role={invitation.role}"
+        f"&email={invitation.email or ''}"
+    )
 
     # If email sending is disabled via env/setting, skip send_mail
     if not getattr(settings, "INVITATION_EMAIL_ENABLED", False):

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import API from "../api";
+import { useAuth } from "../hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
 
 export default function AssessmentTake() {
@@ -12,6 +13,8 @@ export default function AssessmentTake() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [questionnaireRaw, setQuestionnaireRaw] = useState("");
   const nav = useNavigate();
 
   useEffect(() => {
@@ -35,6 +38,7 @@ export default function AssessmentTake() {
 
           setAssessment(payload);
           setModel(m);
+          setQuestionnaireRaw(JSON.stringify(questionnaire, null, 2));
         }
       } catch (err) {
         console.error("Failed to load assessment", err);
@@ -49,6 +53,32 @@ export default function AssessmentTake() {
       mounted = false;
     };
   }, [id]);
+
+  const { user } = useAuth();
+
+  function buildAnswerKeyFromModel(m) {
+    const data = m?.data || {};
+    const answerKey = {};
+    Object.keys(data).forEach((k) => {
+      const v = data[k];
+      if (v === undefined || v === null || v === "") return;
+      if (Array.isArray(v)) answerKey[k] = { correctAnswers: v };
+      else answerKey[k] = { correctAnswer: v };
+    });
+    return answerKey;
+  }
+
+  async function saveAsAnswerKey() {
+    if (!model) return;
+    try {
+      const ak = buildAnswerKeyFromModel(model);
+      await API.put(`students/assessments/${id}/`, { answer_key: ak });
+      alert("Saved current selections as correct answers.");
+    } catch (err) {
+      console.error("Failed to save answer key", err);
+      alert("Failed to save answer key: " + (err?.response?.data || err.message));
+    }
+  }
 
   async function submitAnswers() {
     if (!model) return;
@@ -72,6 +102,28 @@ export default function AssessmentTake() {
       alert("Submit failed: " + msg);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function saveQuestions() {
+    try {
+      const [parsed, err] = (() => {
+        try { return [JSON.parse(questionnaireRaw), null]; } catch (e) { return [null, e.message]; }
+      })();
+      if (err) {
+        alert("Invalid JSON: " + err);
+        return;
+      }
+      const res = await API.put(`students/assessments/${id}/`, { questionnaire: parsed });
+      const updated = res.data?.data || res.data || res;
+      alert("Questions updated");
+      const m = new Model(parsed);
+      setModel(m);
+      setAssessment(updated);
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Failed to save questions", err);
+      alert("Failed to save questions: " + (err?.response?.data || err.message));
     }
   }
 
@@ -135,18 +187,30 @@ export default function AssessmentTake() {
           </h5>
         </div>
         <div className="card-body">
-          {model ? (
+          {isEditing ? (
+            <>
+              <label className="form-label">Questionnaire JSON</label>
+              <textarea
+                className="form-control mb-2"
+                rows={10}
+                value={questionnaireRaw}
+                onChange={(e) => setQuestionnaireRaw(e.target.value)}
+              />
+              <div className="d-flex gap-2">
+                <button className="btn btn-sm btn-primary" onClick={saveQuestions}>Save Questions</button>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+              </div>
+            </>
+          ) : model ? (
             <Survey model={model} />
           ) : (
-            <div className="alert alert-warning mb-0">
-              Invalid questionnaire.
-            </div>
+            <div className="alert alert-warning mb-0">Invalid questionnaire.</div>
           )}
         </div>
       </div>
 
-      {!alreadySubmitted && (
-        <div className="d-flex justify-content-end">
+      <div className="d-flex justify-content-end gap-2">
+        {!alreadySubmitted && (
           <button
             type="button"
             className="btn btn-primary"
@@ -155,8 +219,29 @@ export default function AssessmentTake() {
           >
             {submitting ? "Submitting…" : "Submit answers"}
           </button>
-        </div>
-      )}
+        )}
+
+        {/* Teachers/Admins can mark the current selections as the correct answers */}
+        {user && (user.role === "teacher" || user.role === "admin") && (
+          <button
+            type="button"
+            className="btn btn-outline-success"
+            onClick={saveAsAnswerKey}
+            disabled={!model}
+          >
+            Save current selections as correct answers
+          </button>
+        )}
+        {user && (user.role === "teacher" || user.role === "admin") && (
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={() => setIsEditing((s) => !s)}
+          >
+            {isEditing ? "Close editor" : "Edit Questions"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

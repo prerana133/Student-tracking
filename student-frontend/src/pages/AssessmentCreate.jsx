@@ -82,9 +82,115 @@ export default function AssessmentCreate({ initial }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [previewModel, setPreviewModel] = useState(null);
+  // creation should not capture answers; create only stores questionnaire
 
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+
+  // Predefined templates: 2 Python, 2 Java
+  const templates = [
+    {
+      id: "py-basic",
+      language: "Python",
+      name: "Python - Basics (2 questions)",
+      questionnaire: {
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "radiogroup",
+                name: "py_q1",
+                title: "What is the output of: print(1 + 1)?",
+                choices: ["1", "2", "11"],
+              },
+              {
+                type: "text",
+                name: "py_q2",
+                title: "Name the keyword used to define a function in Python.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      id: "py-advanced",
+      language: "Python",
+      name: "Python - Data Structures (2 questions)",
+      questionnaire: {
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "radiogroup",
+                name: "py_q3",
+                title: "Which data type is immutable?",
+                choices: ["list", "tuple", "dict"],
+              },
+              {
+                type: "text",
+                name: "py_q4",
+                title: "Which built-in function returns the length of a list?",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      id: "java-basic",
+      language: "Java",
+      name: "Java - Basics (2 questions)",
+      questionnaire: {
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "radiogroup",
+                name: "java_q1",
+                title: "Which keyword is used to create a subclass in Java?",
+                choices: ["implements", "extends", "inherits"],
+              },
+              {
+                type: "text",
+                name: "java_q2",
+                title: "What is the entry point method signature for a Java application?",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      id: "java-advanced",
+      language: "Java",
+      name: "Java - OOP (2 questions)",
+      questionnaire: {
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "radiogroup",
+                name: "java_q3",
+                title: "Which feature allows a class to have multiple forms?",
+                choices: ["Abstraction", "Polymorphism", "Encapsulation"],
+              },
+              {
+                type: "text",
+                name: "java_q4",
+                title: "Name the keyword used to define an interface in Java.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ];
 
   useEffect(() => {
     async function loadBatches() {
@@ -116,6 +222,8 @@ export default function AssessmentCreate({ initial }) {
     setPreviewModel(model);
   }
 
+  // No answer capture in create page
+
   useEffect(() => {
     updatePreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,8 +240,10 @@ export default function AssessmentCreate({ initial }) {
       return;
     }
 
-    const { cleanQuestionnaire, answerKey, totalMarks } =
-      extractAnswerKey(questionnaireParsed);
+    // For create: do not include answer_key. Save questionnaire as-is (teacher should create without answers).
+    const cleanQuestionnaire = questionnaireParsed;
+    const answerKey = {};
+    const totalMarks = 0;
 
     const payload = {
       title,
@@ -146,7 +256,6 @@ export default function AssessmentCreate({ initial }) {
 
     try {
       const res = await API.post("students/assessments/", payload);
-      console.log("Saved assessment", res.data);
       setSaving(false);
       alert("Saved assessment");
     } catch (err) {
@@ -189,6 +298,51 @@ export default function AssessmentCreate({ initial }) {
               rows={3}
               placeholder="Short description"
             />
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label">Templates</label>
+            <select
+              className="form-select"
+              value={selectedTemplate}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedTemplate(id);
+                const tpl = templates.find((t) => t.id === id);
+                if (tpl) {
+                  setQuestionnaireRaw(JSON.stringify(tpl.questionnaire, null, 2));
+                  // update preview right away
+                  try {
+                    const parsed = JSON.parse(JSON.stringify(tpl.questionnaire));
+                    const model = new Model(parsed);
+                    setPreviewModel(model);
+                    setError(null);
+                  } catch (err) {
+                    setError("Failed to load template: " + err.message);
+                  }
+                }
+              }}
+            >
+              <option value="">Select a template (optional)</option>
+              <optgroup label="Python">
+                {templates
+                  .filter((t) => t.language === "Python")
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </optgroup>
+              <optgroup label="Java">
+                {templates
+                  .filter((t) => t.language === "Java")
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
           </div>
 
           <div className="mb-3">

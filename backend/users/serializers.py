@@ -201,14 +201,6 @@ class AcceptInvitationSerializer(serializers.Serializer):
             invite.save(update_fields=["is_used"])
 
         return user
-    
-
-from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from students.models import StudentProfile, Batch
-from .models import AdminProfile, TeacherProfile  # adjust import if paths differ
-
-User = get_user_model()
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
