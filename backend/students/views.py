@@ -328,7 +328,7 @@ class AssessmentView(APIView):
         if request.user.is_student():
             profile = getattr(request.user, "student_profile", None)
             if profile and profile.batch_id:
-                queryset = queryset.filter(batch_id=profile.batch_id)
+                queryset = queryset.filter(batch_id=profile.batch_id, answer_key__isnull=False)
             else:
                 queryset = Assessment.objects.none()
         else:
