@@ -144,11 +144,12 @@ export default function InviteUser() {
 
       // create invitation via users/invitations/
       const res = await API.post("users/invitations/", payload);
+      console.log(res.data.data.invitation_url)
 
-      const invitation = res?.data; // invitation object with invitation_url, etc.
+      const invitation = res?.data?.data || res?.data; // invitation object with invitation_url, etc.
       const invitationUrl = invitation?.invitation_url;
 
-      setMessage("Invitation sent successfully!");
+      setMessage(`Invitation sent successfully! \n ${invitationUrl}`);
 
       // Reset form
       setForm({ email: "", role: "", batch: "" });
