@@ -12,48 +12,6 @@ function tryParseJSON(s) {
   }
 }
 
-function extractAnswerKey(questionnaire) {
-  const copy = JSON.parse(JSON.stringify(questionnaire));
-  const answerKey = {};
-  let totalMarks = 0;
-
-  function walk(node) {
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-    } else if (node && typeof node === "object") {
-      if (node.name) {
-        const qName = node.name;
-        const meta = {};
-
-        if (Object.prototype.hasOwnProperty.call(node, "correctAnswer")) {
-          meta.correctAnswer = node.correctAnswer;
-          delete node.correctAnswer;
-        }
-        if (Object.prototype.hasOwnProperty.call(node, "correctAnswers")) {
-          meta.correctAnswers = node.correctAnswers;
-          delete node.correctAnswers;
-        }
-        if (Object.prototype.hasOwnProperty.call(node, "score")) {
-          meta.score = node.score;
-          const s = Number(node.score);
-          if (!Number.isNaN(s)) {
-            totalMarks += s;
-          }
-          delete node.score;
-        }
-
-        if (Object.keys(meta).length > 0) {
-          answerKey[qName] = meta;
-        }
-      }
-
-      Object.keys(node).forEach((k) => walk(node[k]));
-    }
-  }
-
-  walk(copy);
-  return { cleanQuestionnaire: copy, answerKey, totalMarks };
-}
 
 export default function AssessmentCreate({ initial }) {
   const [title, setTitle] = useState(initial?.title || "");
@@ -255,7 +213,7 @@ export default function AssessmentCreate({ initial }) {
     };
 
     try {
-      const res = await API.post("students/assessments/", payload);
+      await API.post("students/assessments/", payload);
       setSaving(false);
       alert("Saved assessment");
     } catch (err) {

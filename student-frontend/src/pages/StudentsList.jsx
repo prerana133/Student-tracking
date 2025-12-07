@@ -1,6 +1,8 @@
 // src/pages/StudentsList.jsx
 import React, { useEffect, useState, useRef } from "react";
 import API from "../api";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 /**
  * Helper to normalize paginated + non-paginated + wrapped responses
@@ -75,6 +77,9 @@ export default function StudentsList() {
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [page, setPage] = useState(1);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isTeacherOrAdmin = user && (user.role === "teacher" || user.role === "admin");
 
   const searchTimer = useRef(null);
 
@@ -360,14 +365,20 @@ export default function StudentsList() {
                         key={s.id ?? s.user_id ?? idx}
                         role="button"
                         tabIndex={0}
-                        onClick={() => { /* row click: open student detail (not implemented) */ }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                /* keyboard open student (not implemented) */
-                              }
-                            }}
-                        style={{ cursor: "pointer" }}
-                        title={`Open ${fullName}`}
+                        onClick={() => {
+                          if (isTeacherOrAdmin && (s.id || s.user_id)) {
+                            navigate(`/students/${s.id || s.user_id}/edit`);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            if (isTeacherOrAdmin && (s.id || s.user_id)) {
+                              navigate(`/students/${s.id || s.user_id}/edit`);
+                            }
+                          }
+                        }}
+                        style={{ cursor: isTeacherOrAdmin ? "pointer" : "default" }}
+                        title={isTeacherOrAdmin ? `Edit ${fullName}` : `Open ${fullName}`}
                       >
                         <td>{(page - 1) * (students.length || 1) + idx + 1}</td>
 

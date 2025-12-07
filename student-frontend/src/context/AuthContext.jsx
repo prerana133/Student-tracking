@@ -161,7 +161,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (username, password) => {
-    const res = await API.post("users/login/", { username, password });
+    const res = await API.post("users/auth/login/", { username, password });
     const body = res.data || {};
 
     const tokens =
@@ -219,7 +219,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const acceptInvitation = async (payload) => {
-    return API.post("users/accept-invitation/", payload);
+    return API.post("users/auth/accept-invitation/", payload);
   };
 
   return (

@@ -100,15 +100,24 @@ class BatchView(APIView):
 class StudentsProfileView(APIView):
     pagination_class = StandardPagination
 
-    def get(self, request):
+    def get(self, request, student_id=None):
+        # If a student_id is provided in the URL, return that single profile (teachers/admins only)
+        if student_id is not None:
+            if not (request.user.is_teacher() or request.user.is_admin()):
+                return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+            profile = get_object_or_404(StudentProfile, id=student_id)
+            serializer = StudentProfileSerializer(profile)
+            return Response(serializer.data)
+
+        # No student_id -> list or current student's profile
         if request.user.is_teacher() or request.user.is_admin():
             queryset = StudentProfile.objects.all()
-            
+
             # Filtering
             batch_id = request.GET.get('batch_id')
             course = request.GET.get('course')
             search = request.GET.get('search')
-            
+
             if batch_id:
                 queryset = queryset.filter(batch_id=batch_id)
             if course:
@@ -121,21 +130,19 @@ class StudentsProfileView(APIView):
                 ) | queryset.filter(
                     roll_no__icontains=search
                 )
-            
+
             # Pagination
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(queryset, request)
             serializer = StudentProfileSerializer(page, many=True)
             return paginator.get_paginated_response(serializer.data)
-            
+
         elif request.user.is_student():
             profile = get_object_or_404(StudentProfile, user=request.user)
             serializer = StudentProfileSerializer(profile)
             return Response(serializer.data)
-        return Response(
-            {"message": "Permission denied"},
-            status=status.HTTP_403_FORBIDDEN
-        )
+
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
     
     def post(self, request):
         """Create new student (Admin/Teacher only)"""
@@ -656,7 +663,16 @@ class AssessmentDetailView(APIView):
                 return Response({"message": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = AssessmentSerializer(assessment, context={"request": request})
-        return Response(serializer.data)
+        data = serializer.data
+
+        # For teachers/admins include all submissions for this assessment
+        if request.user.is_authenticated and (request.user.is_teacher() or request.user.is_admin()):
+            from students.serializers import AssessmentSubmissionSerializer
+
+            submissions = assessment.submissions.all()
+            data["submissions"] = AssessmentSubmissionSerializer(submissions, many=True).data
+
+        return Response(data)
 
     def put(self, request, assessment_id):
         if not (request.user.is_teacher() or request.user.is_admin()):

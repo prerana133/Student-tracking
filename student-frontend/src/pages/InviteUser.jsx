@@ -2,8 +2,11 @@
 import React, { useEffect, useState } from "react";
 import API from "../api"; // axios wrapper
 import { useAuth } from "../hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 export default function InviteUser() {
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
     email: "",
     role: "",
@@ -20,6 +23,9 @@ export default function InviteUser() {
   const [invitations, setInvitations] = useState([]);
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [invitesError, setInvitesError] = useState("");
+
+  // Resend loading state (per invitation)
+  const [resendLoadingId, setResendLoadingId] = useState(null);
 
   // ---- helpers ----
   function extractListFromResponse(resp) {
@@ -50,7 +56,11 @@ export default function InviteUser() {
     setForm((prev) => {
       // When changing role, clear batch unless role is student
       if (name === "role") {
-        return { ...prev, role: value, batch: value === "student" ? prev.batch : "" };
+        return {
+          ...prev,
+          role: value,
+          batch: value === "student" ? prev.batch : "",
+        };
       }
 
       return { ...prev, [name]: value };
@@ -78,7 +88,9 @@ export default function InviteUser() {
     try {
       setInvitesLoading(true);
       setInvitesError("");
-      const resp = await API.get("users/invite-user/");
+
+      // new backend endpoint (DRF viewset)
+      const resp = await API.get("users/invitations/");
       const list = extractInviteList(resp);
       setInvitations(list || []);
     } catch (err) {
@@ -101,7 +113,8 @@ export default function InviteUser() {
   const allowedRoles = (() => {
     const r = user?.role || user?.roles || null;
     const roleStr = typeof r === "string" ? r.toLowerCase() : null;
-    if (roleStr === "admin" || user?.is_superuser) return ["student", "teacher", "admin"];
+    if (roleStr === "admin" || user?.is_superuser)
+      return ["student", "teacher", "admin"];
     if (roleStr === "teacher") return ["student", "teacher"];
     // default fallback: allow only student invite
     return ["student"];
@@ -112,58 +125,106 @@ export default function InviteUser() {
     if (form.role && !allowedRoles.includes(form.role)) {
       setForm((prev) => ({ ...prev, role: "", batch: "" }));
     }
-  }, [allowedRoles]);
+  }, [allowedRoles]); // eslint-disable-line react-hooks/exhaustive-deps
 
-const submit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setMessage("");
+  const submit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
 
-  try {
-    if (form.role === "student" && !form.batch) {
-      setMessage("Please select a batch for the student invitation.");
+    try {
+      if (form.role === "student" && !form.batch) {
+        setMessage("Please select a batch for the student invitation.");
+        setLoading(false);
+        return;
+      }
+
+      const payload = { email: form.email, role: form.role };
+      if (form.role === "student" && form.batch) payload.batch = form.batch;
+
+      // create invitation via users/invitations/
+      const res = await API.post("users/invitations/", payload);
+
+      const invitation = res?.data; // invitation object with invitation_url, etc.
+      const invitationUrl = invitation?.invitation_url;
+
+      setMessage("Invitation sent successfully!");
+
+      // Reset form
+      setForm({ email: "", role: "", batch: "" });
+
+      // Reload table
+      loadInvitations();
+
+      // Auto redirect (open invitation link in new tab and optionally navigate)
+      if (invitationUrl) {
+        setMessage(`Redirecting user to: ${invitationUrl}`);
+        try {
+          window.open(invitationUrl, "_blank");
+        } catch {
+          /* ignore popup blockers */
+        }
+        setTimeout(() => {
+          window.location.href = invitationUrl;
+        }, 1200);
+      }
+    } catch (err) {
+      const apiMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.detail ||
+        err?.response?.data ||
+        "Failed to send";
+      setMessage(
+        typeof apiMsg === "string" ? apiMsg : JSON.stringify(apiMsg)
+      );
+    } finally {
       setLoading(false);
-      return;
     }
+  };
 
-    const payload = { email: form.email, role: form.role };
-    if (form.role === "student" && form.batch) payload.batch = form.batch;
+  // ---- RESEND invitation if not accepted ----
+  const handleResend = async (inviteId) => {
+    setResendLoadingId(inviteId);
+    setMessage("");
 
-    // ---- CALL API AND GET THE RESPONSE ----
-    const res = await API.post("/users/invite-user/", payload);
+    try {
+      // correct endpoint: users/invitations/{id}/resend/
+      const res = await API.post(`users/invitations/${inviteId}/resend/`);
+      const msg = res?.data?.message || "Invitation resent successfully.";
+      setMessage(msg);
 
-    const invitation = res?.data?.data; // your response structure
-    const invitationUrl = invitation?.invitation_url;
+      // If backend returns a fresh invitation URL, open it in a new tab
+      const invitationUrl = res?.data?.invitation_url;
+      if (invitationUrl) {
+        try {
+          window.open(invitationUrl, "_blank");
+        } catch {
+          // ignore popup blockers
+        }
+      }
 
-    setMessage("Invitation sent successfully!");
+      // refresh list to keep UI in sync
+      loadInvitations();
+    } catch (err) {
+      console.error("Failed to resend invitation", err);
+      const apiMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.detail ||
+        err?.response?.data ||
+        "Failed to resend invitation";
+      const msg = typeof apiMsg === "string" ? apiMsg : JSON.stringify(apiMsg);
+      setMessage(msg);
 
-    // Reset form (no prefill)
-    setForm({ email: "", role: "", batch: "" });
-
-    // Reload table
-    loadInvitations();
-
-    // ---- AUTO REDIRECT USER TO INVITATION ACCEPT PAGE ----
-    if (invitationUrl) {
-      setMessage(`Redirecting user to: ${invitationUrl}`);
-
-      // redirect after 1 second
-      setTimeout(() => {
-        window.location.href = invitationUrl;
-      }, 1200);
+      // Redirect user to the invite page so they can resend manually
+      try {
+        navigate("/invite");
+      } catch {
+        // ignore navigation errors
+      }
+    } finally {
+      setResendLoadingId(null);
     }
-  } catch (err) {
-    const apiMsg =
-      err?.response?.data?.message ||
-      err?.response?.data?.detail ||
-      err?.response?.data ||
-      "Failed to send";
-    setMessage(typeof apiMsg === "string" ? apiMsg : JSON.stringify(apiMsg));
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   const isStudentRole = form.role === "student";
 
@@ -194,7 +255,7 @@ const submit = async (e) => {
         </div>
       )}
 
-      {/* Send Invitation form (Bootstrap card) */}
+      {/* Send Invitation form */}
       <div className="card shadow-sm mb-4">
         <div className="card-body">
           <h5 className="card-title mb-3">Send Invitation</h5>
@@ -217,7 +278,12 @@ const submit = async (e) => {
               {/* Role */}
               <div className="col-12 col-sm-6 col-md-3">
                 <label className="form-label">Role</label>
-                <select name="role" value={form.role} onChange={handleChange} className="form-select">
+                <select
+                  name="role"
+                  value={form.role}
+                  onChange={handleChange}
+                  className="form-select"
+                >
                   <option value="">Select role</option>
                   {allowedRoles.map((r) => (
                     <option key={r} value={r}>
@@ -231,7 +297,13 @@ const submit = async (e) => {
               {isStudentRole && (
                 <div className="col-12 col-sm-6 col-md-3">
                   <label className="form-label">
-                    Batch <span className="text-danger" style={{ fontSize: "0.8rem" }}>* required</span>
+                    Batch{" "}
+                    <span
+                      className="text-danger"
+                      style={{ fontSize: "0.8rem" }}
+                    >
+                      * required
+                    </span>
                   </label>
                   <select
                     name="batch"
@@ -241,7 +313,9 @@ const submit = async (e) => {
                     disabled={loadingBatches}
                     required
                   >
-                    <option value="">{loadingBatches ? "Loading batches..." : "Select batch"}</option>
+                    <option value="">
+                      {loadingBatches ? "Loading batches..." : "Select batch"}
+                    </option>
                     {batches.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name || `Batch #${b.id}`}
@@ -266,7 +340,7 @@ const submit = async (e) => {
         </div>
       </div>
 
-      {/* Invited Users List (embedded) */}
+      {/* Invited Users List */}
       <div className="card shadow-sm">
         <div className="card-header d-flex justify-content-between align-items-center">
           <h5 className="mb-0">Invited Users</h5>
@@ -284,13 +358,14 @@ const submit = async (e) => {
                   <th>Batch</th>
                   <th>Status</th>
                   <th>Sent At</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
                 {invitesLoading && (
                   <tr>
-                    <td colSpan={5} className="text-center py-4">
+                    <td colSpan={6} className="text-center py-4">
                       <div className="spinner-border spinner-border-sm me-2" />
                       Loading invitations...
                     </td>
@@ -299,7 +374,7 @@ const submit = async (e) => {
 
                 {!invitesLoading && invitations.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-center py-4 text-muted">
+                    <td colSpan={6} className="text-center py-4 text-muted">
                       No invitations found. Send your first invite above.
                     </td>
                   </tr>
@@ -309,7 +384,9 @@ const submit = async (e) => {
                   invitations.map((inv) => (
                     <tr key={inv.id}>
                       <td>{inv.email}</td>
-                      <td className="text-capitalize">{inv.role || "—"}</td>
+                      <td className="text-capitalize">
+                        {inv.role || "—"}
+                      </td>
                       <td>{inv.batch_name || inv.batch || "—"}</td>
                       <td>
                         {inv.is_used ? (
@@ -324,6 +401,22 @@ const submit = async (e) => {
                         {inv.created_at
                           ? new Date(inv.created_at).toLocaleString()
                           : "—"}
+                      </td>
+                      <td>
+                        {!inv.is_used ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            disabled={resendLoadingId === inv.id}
+                            onClick={() => handleResend(inv.id)}
+                          >
+                            {resendLoadingId === inv.id
+                              ? "Resending..."
+                              : "Resend"}
+                          </button>
+                        ) : (
+                          <span className="text-muted small">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

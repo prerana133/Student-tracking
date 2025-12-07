@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import API from "../api";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 export default function AssessmentList() {
   const [list, setList] = useState([]);
@@ -11,6 +12,9 @@ export default function AssessmentList() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isTeacherOrAdmin =
+    user && (user.role === "teacher" || user.role === "admin");
 
   async function load(url = "/students/assessments/?page_size=4") {
     setLoading(true);
@@ -20,7 +24,7 @@ export default function AssessmentList() {
       const results = data?.results || data;
 
       setList(results || []);
-      setCount(data?.count || results.length || 0);
+      setCount(data?.count ?? (results ? results.length : 0));
       setNext(data?.next || null);
       setPrev(data?.previous || null);
     } catch (err) {
@@ -34,10 +38,42 @@ export default function AssessmentList() {
     load();
   }, []);
 
+  // fallback scoring (if backend didn't store score) – used only when score is null/undefined
+  function calculateScoreFromKey(key, answers) {
+    if (!key || typeof key !== "object") return 0;
+    if (!answers || typeof answers !== "object") return 0;
+    let total = 0;
+    Object.keys(key).forEach((qname) => {
+      const meta = key[qname] || {};
+      const expectedSingle = meta.correctAnswer;
+      const expectedMulti = meta.correctAnswers;
+      const questionScore = Number(meta.score || 0);
+      const userAnswer = answers[qname];
+
+      if (Array.isArray(expectedMulti)) {
+        if (
+          Array.isArray(userAnswer) &&
+          userAnswer.length === expectedMulti.length &&
+          expectedMulti.every((v) => userAnswer.includes(v))
+        ) {
+          total += questionScore;
+        }
+      } else if (expectedSingle !== undefined && expectedSingle !== null) {
+        if (userAnswer === expectedSingle) total += questionScore;
+      }
+    });
+    return total;
+  }
+
   return (
     <div className="container-fluid">
-      <div className="mb-3">
+      <div className="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h3 className="mb-0">Available Assessments</h3>
+        {isTeacherOrAdmin && (
+          <small className="text-muted">
+            (Teachers/Admins see all assessments)
+          </small>
+        )}
       </div>
 
       {loading && (
@@ -58,8 +94,22 @@ export default function AssessmentList() {
             {list.map((a) => {
               const isSubmitted = !!a.is_submitted;
               const submission = a.student_submission || null;
-              const score = submission?.score;
+              const rawScore = submission?.score;
               const totalMarks = a.total_marks;
+
+              // if backend score exists (including 0), use it
+              let displayScore = rawScore;
+              if (
+                (displayScore === null || displayScore === undefined) &&
+                a.answer_key &&
+                submission?.answers
+              ) {
+                // only fallback when score missing
+                displayScore = calculateScoreFromKey(
+                  a.answer_key,
+                  submission.answers
+                );
+              }
 
               return (
                 <div className="col-12 col-sm-6 col-lg-4" key={a.id}>
@@ -69,7 +119,8 @@ export default function AssessmentList() {
                         <h6 className="card-title mb-0 text-truncate">
                           {a.title}
                         </h6>
-                        {/* Status Badge */}
+
+                        {/* Status Badge (student-centric) */}
                         {isSubmitted ? (
                           <span className="badge bg-success-subtle text-success border border-success-subtle text-nowrap">
                             ✅ Done
@@ -100,14 +151,15 @@ export default function AssessmentList() {
                         </div>
                       </div>
 
-                      {/* Score */}
+                      {/* Student score display (if submitted) */}
                       {isSubmitted && (
                         <div className="mb-2 p-2 bg-light rounded">
                           <small className="text-dark">
                             Score:{" "}
                             <strong>
-                              {score}
-                              {typeof totalMarks === "number" && ` / ${totalMarks}`}
+                              {displayScore ?? "—"}
+                              {typeof totalMarks === "number" &&
+                                ` / ${totalMarks}`}
                             </strong>
                           </small>
                         </div>
@@ -117,7 +169,9 @@ export default function AssessmentList() {
                         <button
                           type="button"
                           className="btn btn-sm btn-primary w-100"
-                          onClick={() => navigate(`/assessments/${a.id}/take`)}
+                          onClick={() =>
+                            navigate(`/assessments/${a.id}/take`)
+                          }
                         >
                           {isSubmitted ? "View" : "Take Test"}
                         </button>

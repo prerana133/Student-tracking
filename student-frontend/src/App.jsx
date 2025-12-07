@@ -18,6 +18,7 @@ import AssessmentCreate from "./pages/AssessmentCreate";
 import AssessmentTake from "./pages/AssessmentTake";
 import AssessmentList from "./pages/AssessmentList";
 import StudentsList from "./pages/StudentsList";
+import StudentEdit from "./pages/StudentEdit";
 
 function PrivateRoute({ children, allowedRoles }) {
   // useAuth should ideally expose `user` and `loading` (boolean)
@@ -98,6 +99,17 @@ export default function App() {
           <PrivateRoute>
             <Layout>
               <StudentsList />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/students/:id/edit"
+        element={
+          <PrivateRoute allowedRoles={["admin", "teacher"]}>
+            <Layout>
+              <StudentEdit />
             </Layout>
           </PrivateRoute>
         }

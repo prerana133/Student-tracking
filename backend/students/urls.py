@@ -1,6 +1,6 @@
 from django.urls import path
 from students.views import (
-    AssessmentDetailView, AssessmentListCreateView, AssessmentSubmitView, BulkAttendanceView, StudentsProfileView, BatchView, AttendanceView, 
+    AssessmentDetailView, AssessmentListCreateView, AssessmentSubmitView, BulkAttendanceView, StudentDashboardView, StudentsProfileView, BatchView, AttendanceView, 
     AssessmentView, AssessmentSubmissionView, 
     StudentScoreHistoryView, BatchScoreView,
     AttendanceTrendView, MonthlyAttendanceReportView, ScoreTrendView, 
@@ -34,10 +34,15 @@ urlpatterns = [
     path('analytics/score-trend/<int:student_id>/', ScoreTrendView.as_view(), name='score-trend'),
     path('analytics/batch-summary/<int:batch_id>/', BatchAnalyticsView.as_view(), name='batch-summary'),
     path('analytics/predict/<int:student_id>/', LowPerformingPredictionView.as_view(), name='predict'),
-path("attendance/bulk/", BulkAttendanceView.as_view(), name="attendance-bulk"),
-# students/urls.py (add these)
-path("assessments/", AssessmentListCreateView.as_view(), name="assessments-list-create"),
-path("assessments/<int:assessment_id>/", AssessmentDetailView.as_view(), name="assessment-detail"),
-path("assessments/<int:assessment_id>/submit/", AssessmentSubmitView.as_view(), name="assessment-submit"),
+    path("attendance/bulk/", BulkAttendanceView.as_view(), name="attendance-bulk"),
+    # students/urls.py (add these)
+    path("assessments/", AssessmentListCreateView.as_view(), name="assessments-list-create"),
+    path("assessments/<int:assessment_id>/", AssessmentDetailView.as_view(), name="assessment-detail"),
+    path("assessments/<int:assessment_id>/submit/", AssessmentSubmitView.as_view(), name="assessment-submit"),
+    path(
+        'analytics/student-dashboard/',
+        StudentDashboardView.as_view(),
+        name='student-dashboard'
+    ),
 
 ]

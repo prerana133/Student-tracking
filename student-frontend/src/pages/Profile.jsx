@@ -48,7 +48,7 @@ export default function Profile() {
     setMessage("");
 
     try {
-      const resp = await API.get("users/my-profile/");
+      const resp = await API.get("users/users/me/");
       const data = resp.data?.data ?? resp.data;
 
 
@@ -102,7 +102,7 @@ export default function Profile() {
         phone: profile.phone,
       };
 
-      const resp = await API.patch("/users/my-profile/", payload);
+      const resp = await API.patch("/users/users/me/", payload);
       const saved = resp.data?.data ?? resp.data;
 
       setMessage("Profile saved successfully.");

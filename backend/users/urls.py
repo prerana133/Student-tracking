@@ -1,15 +1,23 @@
-from django.urls import path
-from users.views import CurrentUserView, MyProfileView, ResendInvitationView, SignupView, LoginView, InvitationView, AcceptInvitationView, CustomTokenRefreshView, AvatarUploadView
+# users/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from users.views import (
+    AuthViewSet,
+    UserViewSet,
+    InvitationViewSet,
+    CustomTokenRefreshView,
+)
+
+router = DefaultRouter()
+router.register(r"auth", AuthViewSet, basename="auth")
+router.register(r"users", UserViewSet, basename="users")
+router.register(r"invitations", InvitationViewSet, basename="invitations")
 
 urlpatterns = [
-    path('signup/', SignupView.as_view(), name='signup'),
-    path('login/', LoginView.as_view(), name='login'),
-    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
-    path('invite-user/', InvitationView.as_view(), name='invite_user'),
-    path('accept-invitation/', AcceptInvitationView.as_view(), name='accept_invitation'),
-    path('invite-user/resend/<int:invite_id>/', ResendInvitationView.as_view(), name='resend_invite'),
-    path("me/", CurrentUserView.as_view(), name="current-user"),
-    path("my-profile/", MyProfileView.as_view(), name="my-profile"),
-    path("me/avatar/", AvatarUploadView.as_view(), name="avatar-upload"),
+    # ViewSets (signup/login/profile/invitations/etc.)
+    path("", include(router.urls)),
 
+    # Token refresh (kept as a separate view)
+    path("auth/token/refresh/", CustomTokenRefreshView.as_view(), name="token_refresh"),
 ]

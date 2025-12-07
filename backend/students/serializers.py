@@ -33,8 +33,8 @@ class AssessmentSerializer(serializers.ModelSerializer):
     is_submitted = serializers.SerializerMethodField()
     student_submission = serializers.SerializerMethodField()
 
-    # answer_key is stored but NEVER returned (write-only)
-    answer_key = serializers.JSONField(write_only=True, required=False, default=dict)
+    # answer_key is stored; visible only to teacher/admin in to_representation
+    answer_key = serializers.JSONField(required=False, default=dict)
 
     class Meta:
         model = Assessment
@@ -66,6 +66,28 @@ class AssessmentSerializer(serializers.ModelSerializer):
         if not submission:
             return None
         return AssessmentSubmissionSerializer(submission).data
+
+    def to_representation(self, instance):
+        """
+        Hide answer_key from students/anonymous, show it to teachers/admins.
+        """
+        rep = super().to_representation(instance)
+        request = self.context.get("request")
+
+        # Default: never expose answer_key to anonymous
+        if not request or not request.user.is_authenticated:
+            rep.pop("answer_key", None)
+            return rep
+
+        user = request.user
+
+        # Hide from students
+        if hasattr(user, "is_student") and user.is_student():
+            rep.pop("answer_key", None)
+            return rep
+
+        # Teachers/admins keep answer_key
+        return rep
 
     def create(self, validated_data):
         """

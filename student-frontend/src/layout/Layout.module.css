@@ -1,0 +1,42 @@
+.appLayout {
+  min-height: 100vh;
+  display: block;
+  background-color: #f8f9fa;
+}
+
+.mainContent {
+  transition: margin-left 0.12s ease, padding 0.12s ease;
+  padding: 1.25rem;
+}
+
+/* Offset main content to the right of the fixed sidebar on desktop */
+.appLayout .mainContent {
+  margin-left: var(--sidenav-width, 250px);
+}
+
+.sideNav {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1030;
+  width: var(--sidenav-width, 250px);
+  transition: width 0.12s ease;
+}
+
+.card {
+  border-radius: 0.6rem;
+}
+
+/* Mobile styles */
+@media (max-width: 991.98px) {
+  .mainContent {
+    margin-left: 0;
+    padding: 0.75rem;
+  }
+  
+  .sideNav {
+    position: static;
+    width: 100%;
+  }
+}
