@@ -13,8 +13,7 @@ export default function AssessmentList() {
 
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isTeacherOrAdmin =
-    user && (user.role === "teacher" || user.role === "admin");
+  const isTeacherOrAdmin = user && (user.role === "teacher" || user.role === "admin");
 
   async function load(url = "/students/assessments/?page_size=4") {
     setLoading(true);
@@ -37,33 +36,6 @@ export default function AssessmentList() {
   useEffect(() => {
     load();
   }, []);
-
-  // fallback scoring (if backend didn't store score) – used only when score is null/undefined
-  function calculateScoreFromKey(key, answers) {
-    if (!key || typeof key !== "object") return 0;
-    if (!answers || typeof answers !== "object") return 0;
-    let total = 0;
-    Object.keys(key).forEach((qname) => {
-      const meta = key[qname] || {};
-      const expectedSingle = meta.correctAnswer;
-      const expectedMulti = meta.correctAnswers;
-      const questionScore = Number(meta.score || 0);
-      const userAnswer = answers[qname];
-
-      if (Array.isArray(expectedMulti)) {
-        if (
-          Array.isArray(userAnswer) &&
-          userAnswer.length === expectedMulti.length &&
-          expectedMulti.every((v) => userAnswer.includes(v))
-        ) {
-          total += questionScore;
-        }
-      } else if (expectedSingle !== undefined && expectedSingle !== null) {
-        if (userAnswer === expectedSingle) total += questionScore;
-      }
-    });
-    return total;
-  }
 
   return (
     <div className="container-fluid">
@@ -94,22 +66,8 @@ export default function AssessmentList() {
             {list.map((a) => {
               const isSubmitted = !!a.is_submitted;
               const submission = a.student_submission || null;
-              const rawScore = submission?.score;
+              const score = submission?.score;
               const totalMarks = a.total_marks;
-
-              // if backend score exists (including 0), use it
-              let displayScore = rawScore;
-              if (
-                (displayScore === null || displayScore === undefined) &&
-                a.answer_key &&
-                submission?.answers
-              ) {
-                // only fallback when score missing
-                displayScore = calculateScoreFromKey(
-                  a.answer_key,
-                  submission.answers
-                );
-              }
 
               return (
                 <div className="col-12 col-sm-6 col-lg-4" key={a.id}>
@@ -157,7 +115,7 @@ export default function AssessmentList() {
                           <small className="text-dark">
                             Score:{" "}
                             <strong>
-                              {displayScore ?? "—"}
+                              {score}
                               {typeof totalMarks === "number" &&
                                 ` / ${totalMarks}`}
                             </strong>
