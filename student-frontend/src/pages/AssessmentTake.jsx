@@ -6,6 +6,68 @@ import API from "../api";
 import { useAuth } from "../hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
 
+// ---- Helpers to build side-by-side comparison ----
+
+function buildQuestionTitleMap(questionnaire) {
+  const map = {};
+  if (!questionnaire || typeof questionnaire !== "object") return map;
+
+  const pages = questionnaire.pages || [];
+  pages.forEach((page) => {
+    const elements = page.elements || [];
+    elements.forEach((el) => {
+      if (el && el.name) {
+        map[el.name] = el.title || el.name;
+      }
+    });
+  });
+
+  return map;
+}
+
+function normalizeAnswer(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}
+
+function buildAnswerComparison(questionnaire, answerKey, answers) {
+  const rows = [];
+  if (!answerKey || typeof answerKey !== "object") return rows;
+
+  const titleMap = buildQuestionTitleMap(questionnaire);
+  const ansObj = answers || {};
+
+  Object.keys(answerKey).forEach((qname, index) => {
+    const meta = answerKey[qname] || {};
+    const correct =
+      meta.correctAnswers !== undefined && meta.correctAnswers !== null
+        ? meta.correctAnswers
+        : meta.correctAnswer;
+    const your = ansObj[qname];
+
+    const normCorrect = normalizeAnswer(correct);
+    const normYour = normalizeAnswer(your);
+
+    const isCorrect = normYour === normCorrect && normCorrect !== "—";
+
+    rows.push({
+      id: qname,
+      no: index + 1,
+      title: titleMap[qname] || qname,
+      your: normYour,
+      correct: normCorrect,
+      isCorrect,
+    });
+  });
+
+  return rows;
+}
+
+// ---------------------------------------------------
+
 export default function AssessmentTake() {
   const { id } = useParams(); // route: /assessments/:id/take
   const [assessment, setAssessment] = useState(null);
@@ -20,7 +82,8 @@ export default function AssessmentTake() {
   const nav = useNavigate();
 
   const { user } = useAuth();
-  const isTeacherOrAdmin = user && (user.role === "teacher" || user.role === "admin");
+  const isTeacherOrAdmin =
+    user && (user.role === "teacher" || user.role === "admin");
 
   // Load assessment detail
   useEffect(() => {
@@ -37,7 +100,7 @@ export default function AssessmentTake() {
 
         const m = new Model(questionnaire);
 
-        // For students: pre-fill answers & make read-only
+        // For students: pre-fill answers & make read-only if already submitted
         if (payload.is_submitted && payload.student_submission) {
           const submittedAnswers = payload.student_submission.answers || {};
           m.data = submittedAnswers;
@@ -77,7 +140,6 @@ export default function AssessmentTake() {
       const v = data[k];
       if (v === undefined || v === null || v === "") return;
 
-      // Default score per question; teacher can later extend to custom per-question scoring if needed
       const score = 1;
       if (Array.isArray(v)) {
         answerKey[k] = { correctAnswers: v, score };
@@ -89,12 +151,41 @@ export default function AssessmentTake() {
     return answerKey;
   }
 
+  // Client-side scoring fallback to mirror backend logic (used mainly in teacher table)
+  function calculateScoreFromKey(key, answers) {
+    if (!key || typeof key !== "object") return 0;
+    if (!answers || typeof answers !== "object") return 0;
+    let total = 0;
+    Object.keys(key).forEach((qname) => {
+      const meta = key[qname] || {};
+      const expectedSingle = meta.correctAnswer;
+      const expectedMulti = meta.correctAnswers;
+      const questionScore = Number(meta.score || 0);
+      const userAnswer = answers[qname];
+
+      if (Array.isArray(expectedMulti)) {
+        if (
+          Array.isArray(userAnswer) &&
+          userAnswer.length === expectedMulti.length &&
+          expectedMulti.every((v) => userAnswer.includes(v))
+        ) {
+          total += questionScore;
+        }
+      } else if (expectedSingle !== undefined && expectedSingle !== null) {
+        if (userAnswer === expectedSingle) total += questionScore;
+      }
+    });
+    return total;
+  }
+
   // Teacher: save current selections as answer key
   async function saveAsAnswerKey() {
     if (!model) return;
     try {
       const ak = buildAnswerKeyFromModel(model);
-      const res = await API.put(`students/assessments/${id}/`, { answer_key: ak });
+      const res = await API.put(`students/assessments/${id}/`, {
+        answer_key: ak,
+      });
       const updated = res.data?.data || res.data || res;
       setAssessment(updated);
       alert("Saved current selections as correct answers.");
@@ -146,16 +237,37 @@ export default function AssessmentTake() {
     if (!model) return;
     setSubmitting(true);
     try {
-      const answers = model.data; // { questionName: value }
+      const answers = model.data;
       const res = await API.post(`students/assessments/${id}/submit/`, {
         answers,
       });
 
-      const submission = res.data;
+      const submission = res.data; // { id, score, answers, ... }
       const score = submission.score ?? "N/A";
 
       alert("Submitted — score: " + score);
-      nav("/dashboard");
+
+      // ✅ update assessment state so the page shows "already submitted" & review
+      setAssessment((prev) =>
+        prev
+          ? {
+              ...prev,
+              is_submitted: true,
+              student_submission: submission,
+            }
+          : prev
+      );
+
+      // ✅ switch survey to read-only with student's answers
+      if (assessment && assessment.questionnaire) {
+        const m = new Model(assessment.questionnaire);
+        m.data = submission.answers || {};
+        m.mode = "display";
+        setModel(m);
+      }
+
+      // ✅ set viewingSubmission so comparison table uses latest answers
+      setViewingSubmission(submission);
     } catch (err) {
       console.error("submit failed", err);
       const msg =
@@ -191,7 +303,6 @@ export default function AssessmentTake() {
       alert("Questions updated");
 
       const m = new Model(parsed);
-      // If student had already submitted, keep them in display mode with their answers
       if (updated.is_submitted && updated.student_submission) {
         m.data = updated.student_submission.answers || {};
         m.mode = "display";
@@ -231,6 +342,26 @@ export default function AssessmentTake() {
   const alreadySubmitted =
     assessment.is_submitted && !!assessment.student_submission;
 
+  // rows for student's own answer vs correct answer
+  const studentComparisonRows =
+    alreadySubmitted && assessment.answer_key
+      ? buildAnswerComparison(
+          assessment.questionnaire || {},
+          assessment.answer_key || {},
+          assessment.student_submission?.answers || {}
+        )
+      : [];
+
+  // rows for teacher currently viewing a submission
+  const teacherComparisonRows =
+    viewingSubmission && assessment?.answer_key
+      ? buildAnswerComparison(
+          assessment.questionnaire || {},
+          assessment.answer_key || {},
+          viewingSubmission.answers || {}
+        )
+      : [];
+
   return (
     <div className="container my-4">
       {/* Header */}
@@ -264,6 +395,52 @@ export default function AssessmentTake() {
         </div>
       )}
 
+      {/* Student: side-by-side answer vs correct answer */}
+      {alreadySubmitted &&
+        assessment.answer_key &&
+        studentComparisonRows.length > 0 &&
+        !isTeacherOrAdmin && (
+          <div className="card shadow-sm mb-3">
+            <div className="card-header">
+              <h5 className="mb-0">Answer Review</h5>
+            </div>
+            <div className="card-body table-responsive">
+              <table className="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th style={{ width: "5%" }}>#</th>
+                    <th style={{ width: "35%" }}>Question</th>
+                    <th style={{ width: "30%" }}>Your Answer</th>
+                    <th style={{ width: "30%" }}>Correct Answer</th>
+                    <th style={{ width: "10%" }}>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentComparisonRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.no}</td>
+                      <td>{row.title}</td>
+                      <td>{row.your}</td>
+                      <td>{row.correct}</td>
+                      <td>
+                        {row.isCorrect ? (
+                          <span className="badge bg-success-subtle text-success border border-success-subtle">
+                            ✔
+                          </span>
+                        ) : (
+                          <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
+                            ✖
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
       {/* Main card */}
       <div className="card shadow-sm mb-3">
         <div className="card-header">
@@ -292,7 +469,15 @@ export default function AssessmentTake() {
                       <tr key={s.id}>
                         <td>{s.student_name || "—"}</td>
                         <td>{s.student_roll_no || "—"}</td>
-                        <td>{s.score ?? "—"}</td>
+                        <td>
+                          {s.score ??
+                            (assessment?.answer_key
+                              ? calculateScoreFromKey(
+                                  assessment.answer_key,
+                                  s.answers
+                                )
+                              : "—")}
+                        </td>
                         <td>
                           {s.submitted_at
                             ? new Date(s.submitted_at).toLocaleString()
@@ -315,46 +500,94 @@ export default function AssessmentTake() {
           )}
 
           {/* Currently viewing a submission (teacher) */}
-          {viewingSubmission && (
-            <div className="alert alert-info d-flex justify-content-between align-items-center">
-              <div>
-                Viewing submission by{" "}
-                <strong>{viewingSubmission.student_name || "—"}</strong>
-                {" — Score: "}
-                <strong>{viewingSubmission.score ?? "—"}</strong>
-              </div>
-              <div>
-                <button
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={() => {
-                    try {
-                      const q = assessment.questionnaire || {};
-                      const m = new Model(q);
+          {viewingSubmission && isTeacherOrAdmin && (
+            <>
+              <div className="alert alert-info d-flex justify-content-between align-items-center">
+                <div>
+                  Viewing submission by{" "}
+                  <strong>{viewingSubmission.student_name || "—"}</strong>
+                  {" — Score: "}
+                  <strong>{viewingSubmission.score ?? "—"}</strong>
+                </div>
+                <div>
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                      try {
+                        const q = assessment.questionnaire || {};
+                        const m = new Model(q);
 
-                      // If this is the logged-in student's own submission
-                      if (
-                        assessment.is_submitted &&
-                        assessment.student_submission &&
-                        assessment.student_submission.id === viewingSubmission.id
-                      ) {
-                        m.data = assessment.student_submission.answers || {};
-                        m.mode = "display";
-                      } else if (isTeacherOrAdmin) {
-                        // Teacher resets back to empty editable questionnaire
-                        m.mode = "edit";
+                        if (
+                          assessment.is_submitted &&
+                          assessment.student_submission &&
+                          assessment.student_submission.id ===
+                            viewingSubmission.id
+                        ) {
+                          m.data =
+                            assessment.student_submission.answers || {};
+                          m.mode = "display";
+                        } else if (isTeacherOrAdmin) {
+                          m.mode = "edit";
+                        }
+
+                        setModel(m);
+                      } catch (e) {
+                        console.error(e);
                       }
-
-                      setModel(m);
-                    } catch (e) {
-                      console.error(e);
-                    }
-                    setViewingSubmission(null);
-                  }}
-                >
-                  Close View
-                </button>
+                      setViewingSubmission(null);
+                    }}
+                  >
+                    Close View
+                  </button>
+                </div>
               </div>
-            </div>
+
+              {/* Teacher: side-by-side view for currently selected submission */}
+              {assessment.answer_key && teacherComparisonRows.length > 0 && (
+                <div className="card mb-3">
+                  <div className="card-header">
+                    <h6 className="mb-0">
+                      Submission vs Answer Key (
+                      {viewingSubmission.student_name || "Student"})
+                    </h6>
+                  </div>
+                  <div className="card-body table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th style={{ width: "5%" }}>#</th>
+                          <th style={{ width: "35%" }}>Question</th>
+                          <th style={{ width: "30%" }}>Student Answer</th>
+                          <th style={{ width: "30%" }}>Correct Answer</th>
+                          <th style={{ width: "10%" }}>Result</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teacherComparisonRows.map((row) => (
+                          <tr key={row.id}>
+                            <td>{row.no}</td>
+                            <td>{row.title}</td>
+                            <td>{row.your}</td>
+                            <td>{row.correct}</td>
+                            <td>
+                              {row.isCorrect ? (
+                                <span className="badge bg-success-subtle text-success border border-success-subtle">
+                                  ✔
+                                </span>
+                              ) : (
+                                <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                  ✖
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Teacher/Admin tools: answer key buttons */}
